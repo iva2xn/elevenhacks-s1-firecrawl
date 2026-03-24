@@ -57,11 +57,22 @@ export async function POST(req: Request) {
     const rootExtraction = resData.data?.extract || { files: [] };
     let allDiscoveredFiles = [...rootExtraction.files];
 
-    // Step 2: Recursive Mapping (Go one level deeper into folders)
-    const folders = rootExtraction.files.filter((f: any) => f.type === 'folder').slice(0, 5); // Limit to first 5 folders for speed
+    // Step 2: Recursive Mapping (Go deep into folders)
+    const initialFolders = rootExtraction.files.filter((f: any) => f.type === 'folder');
+    let processedFolders = new Set<string>();
+    let queue: string[] = initialFolders.map((f: any) => f.url);
+    let depth = 0;
+    const MAX_DEPTH = 3; // Deep enough for app/api/repo/route.ts
 
-    if (folders.length > 0) {
-      const subFolderScrapes = await Promise.all(folders.map(async (folder: any) => {
+    while (queue.length > 0 && depth < MAX_DEPTH) {
+      const currentLevel = [...queue];
+      queue = [];
+      depth++;
+
+      const levelScrapes = await Promise.all(currentLevel.map(async (folderUrl) => {
+        if (processedFolders.has(folderUrl)) return [];
+        processedFolders.add(folderUrl);
+
         try {
           const subRes = await fetch(`${FIRECRAWL_BASE_URL}/v1/scrape`, {
             method: 'POST',
@@ -70,7 +81,7 @@ export async function POST(req: Request) {
               'Authorization': `Bearer ${FIRECRAWL_API_KEY}`
             },
             body: JSON.stringify({
-              url: folder.url,
+              url: folderUrl,
               formats: ['extract'],
               extract: {
                 schema: {
@@ -94,20 +105,52 @@ export async function POST(req: Request) {
           });
           if (subRes.ok) {
             const subData = await subRes.json();
-            return subData.data?.extract?.files || [];
+            const discovered = subData.data?.extract?.files || [];
+            // Add folders to queue for next level
+            const newFolders = discovered.filter((f: any) => f.type === 'folder').map((f: any) => f.url);
+            queue.push(...newFolders);
+            return discovered;
           }
           return [];
         } catch (e) {
-          console.error(`Failed to scrape folder ${folder.name}:`, e);
+          console.error(`Failed to scrape folder:`, e);
           return [];
         }
       }));
 
-      allDiscoveredFiles = [...allDiscoveredFiles, ...subFolderScrapes.flat()];
+      allDiscoveredFiles = [...allDiscoveredFiles, ...levelScrapes.flat()];
+      // Limit queue size to avoid massive scrapes
+      if (queue.length > 20) queue = queue.slice(0, 20);
     }
 
     // Step 3: Clean up and find README
-    const uniqueFiles = Array.from(new Map(allDiscoveredFiles.map(item => [item.url, item])).values());
+    const ignoreList = [
+      'next.config.ts', 'postcss.config.mjs', 'package-lock.json', 
+      'eslint.config.mjs', 'tsconfig.json', '.gitignore', 'favicon', '.git'
+    ];
+
+    const imageExtensions = ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico'];
+    
+    const filteredFiles = allDiscoveredFiles.filter((f: any) => {
+      const lowerName = f.name.toLowerCase();
+      
+      // Strict rule: Only keep README.md if it's a markdown file
+      if (lowerName.endsWith('.md') && lowerName !== 'readme.md') {
+        return false;
+      }
+      
+      // Ignore images
+      if (imageExtensions.some(ext => lowerName.endsWith(ext))) {
+        return false;
+      }
+      
+      // Explicitly ignore boilerplate/config
+      const isBlacklisted = ignoreList.some(term => lowerName.includes(term));
+      
+      return !isBlacklisted;
+    });
+
+    const uniqueFiles = Array.from(new Map(filteredFiles.map((item: any) => [item.url, item])).values());
     const links = uniqueFiles.map((f: any) => f.url);
     
     // Improved README extraction: Use the markdown from the root scrape
