@@ -11,6 +11,8 @@ interface ElevenLabsAgentProps {
   triggerMessage?: string;
   fullCodebase?: any[];
   className?: string;
+  onNavigate?: (fileName: string) => void;
+  onHighlight?: (text: string) => void;
 }
 
 export default function ElevenLabsAgent({
@@ -19,13 +21,17 @@ export default function ElevenLabsAgent({
   activeFileContext,
   triggerMessage,
   fullCodebase,
-  className
+  className,
+  onNavigate,
+  onHighlight
 }: ElevenLabsAgentProps) {
   const envAgentId = process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID || '';
   const agentId = initialAgentId || envAgentId;
 
   const activeFileContextRef = useRef(activeFileContext);
   const fullCodebaseRef = useRef(fullCodebase);
+  const onNavigateRef = useRef(onNavigate);
+  const onHighlightRef = useRef(onHighlight);
 
   useEffect(() => {
     activeFileContextRef.current = activeFileContext;
@@ -34,6 +40,14 @@ export default function ElevenLabsAgent({
   useEffect(() => {
     fullCodebaseRef.current = fullCodebase;
   }, [fullCodebase]);
+
+  useEffect(() => {
+    onNavigateRef.current = onNavigate;
+  }, [onNavigate]);
+
+  useEffect(() => {
+    onHighlightRef.current = onHighlight;
+  }, [onHighlight]);
 
   const conversation = useConversation({
     onConnect: () => console.log('Connected to ElevenLabs'),
@@ -51,6 +65,24 @@ export default function ElevenLabsAgent({
         const ctx = activeFileContextRef.current;
         if (!ctx) return "The user is currently on the dashboard.";
         return JSON.stringify(ctx);
+      },
+      navigate_to_file: async ({ fileName }: { fileName: string }) => {
+        console.log('[TOOL] navigate_to_file called with:', fileName);
+        if (onNavigateRef.current) {
+          onNavigateRef.current(fileName);
+          return `Done.`;
+        }
+        console.error('[TOOL] onNavigateRef is null!');
+        return "Navigation handler not available.";
+      },
+      highlight_code_block: async ({ text }: { text: string }) => {
+        console.log('[TOOL] highlight_code_block called with:', text);
+        if (onHighlightRef.current) {
+          onHighlightRef.current(text);
+          return `Done.`;
+        }
+        console.error('[TOOL] onHighlightRef is null!');
+        return "Highlight handler not available.";
       },
     },
   });
@@ -76,12 +108,21 @@ export default function ElevenLabsAgent({
     } else {
       if (!agentId) return console.error('No ElevenLabs Agent ID provided. Please set NEXT_PUBLIC_ELEVENLABS_AGENT_ID in your environment.');
       try {
+        // Build a condensed codebase summary so the AI has it from the start
+        let codebaseSummary = '';
+        const codebase = fullCodebaseRef.current;
+        if (codebase && codebase.length > 0) {
+          codebaseSummary = '\n\n--- FULL CODEBASE CONTEXT ---\n' + 
+            codebase.map((file: any) => 
+              `FILE: ${file.fileName} (${file.path})\nSUMMARY: ${file.summary || 'No summary'}\nCODE:\n${file.code || 'Not loaded'}\n---`
+            ).join('\n');
+        }
+
         await conversation.startSession({
           agentId,
           connectionType: 'websocket' as any,
           dynamicVariables: {
-            user_context: (context || 'User is browsing projects.') +
-              "\n\nIMPORTANT: You have access to the tool 'get_codebase_context' which returns the entire repository's raw code and summaries. Call it immediately to initialize your knowledge.",
+            user_context: (context || 'User is browsing projects.') + codebaseSummary,
           }
         });
       } catch (error) {

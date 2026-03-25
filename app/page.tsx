@@ -21,10 +21,51 @@ export default function Home() {
   const [repoUrl, setRepoUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
+  const activeProject = projects.find(p => p.id === selectedProjectId);
+
   const [activeIndex, setActiveIndex] = useState(0);
   const [cache, setCache] = useState<Record<string, any>>({});
+  const [activeHighlight, setActiveHighlight] = useState<string | null>(null);
   
+  // Reset highlight when project or file changes
+  useEffect(() => {
+    setActiveHighlight(null);
+  }, [selectedProjectId, activeIndex]);
+
+  const handleNavigate = useCallback((fileName: string) => {
+    if (!activeProject) return;
+    console.log('Attempting to navigate to:', fileName);
+    
+    // Clean up the search string: remove leading slashes, extra spaces
+    const search = fileName.trim().toLowerCase().replace(/^\/+/, '');
+    
+    const index = activeProject.mappedLinks.findIndex(link => {
+      const normalizedLink = link.toLowerCase();
+      return normalizedLink.endsWith(search) || normalizedLink.endsWith('/' + search);
+    });
+
+    if (index !== -1) {
+      console.log('Found match at index:', index, activeProject.mappedLinks[index]);
+      setActiveIndex(index);
+    } else {
+      console.warn('No match found for navigation:', search);
+      // Try a looser match: just the filename part
+      const justFile = search.split('/').pop() || '';
+      const fallbackIndex = activeProject.mappedLinks.findIndex(link => 
+        link.toLowerCase().split('/').pop() === justFile
+      );
+      if (fallbackIndex !== -1) {
+        console.log('Found fallback match at index:', fallbackIndex);
+        setActiveIndex(fallbackIndex);
+      }
+    }
+  }, [activeProject]);
+
+  const handleHighlight = useCallback((text: string) => {
+    setActiveHighlight(text);
+  }, []);
+
   // LOAD projects from localStorage
   useEffect(() => {
     const savedProjects = localStorage.getItem('repo-mapper-projects');
@@ -64,8 +105,6 @@ export default function Home() {
       }
     }
   }, [cache]);
-
-  const activeProject = projects.find(p => p.id === selectedProjectId);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -322,6 +361,7 @@ export default function Home() {
                       rawCode={cache[currentFile || '']?.rawCode}
                       externalData={cache[currentFile || '']?.explanation} 
                       isLoading={!cache[currentFile || '']}
+                      activeHighlight={activeHighlight}
                     >
                       <ElevenLabsAgent 
                         className="relative bottom-0 right-0"
@@ -343,6 +383,8 @@ export default function Home() {
                           fileName: currentFile.split('/').pop(),
                         } : null}
                         triggerMessage={currentFile ? `[EVENT] User navigated to ${currentFile.split('/').pop()}. Call 'get_current_file_info' and summarize its purpose.` : ''}
+                        onNavigate={handleNavigate}
+                        onHighlight={handleHighlight}
                       />
                     </FileExplainer>
                 </div>
