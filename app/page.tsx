@@ -368,8 +368,23 @@ export default function Home() {
             {/* SYNCED Voice Agent Interface */}
             <ElevenLabsAgent 
               context={activeProject?.readmeContent} 
-              activeFileContext={currentFile ? cache[currentFile]?.explanation : null}
-              triggerMessage={currentFile ? `I have moved to ${currentFile.split('/').pop()}. Briefly teach me what its main code does.` : ''}
+              fullCodebase={activeProject?.mappedLinks
+                .map(link => {
+                  const data = cache[link];
+                  if (!data) return null;
+                  return {
+                    fileName: link.split('/').pop(),
+                    path: link.replace('https://github.com/', ''),
+                    code: data.rawCode,
+                    summary: data.explanation?.summary,
+                    highlights: data.explanation?.highlights
+                  };
+                })
+                .filter(Boolean)}
+              activeFileContext={currentFile ? {
+                fileName: currentFile.split('/').pop(),
+              } : null}
+              triggerMessage={currentFile ? `[EVENT] User navigated to ${currentFile.split('/').pop()}. Call 'get_current_file_info' and summarize its purpose.` : ''}
             />
           </div>
         )}

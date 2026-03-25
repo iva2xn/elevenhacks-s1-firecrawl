@@ -9,22 +9,30 @@ interface ElevenLabsAgentProps {
   context?: string;
   activeFileContext?: any;
   triggerMessage?: string;
+  fullCodebase?: any[];
 }
 
 export default function ElevenLabsAgent({ 
   agentId: initialAgentId, 
   context,
   activeFileContext,
-  triggerMessage
+  triggerMessage,
+  fullCodebase
 }: ElevenLabsAgentProps) {
   const envAgentId = process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID || '';
   const [agentId, setAgentId] = useState(initialAgentId || envAgentId);
   const [isSettingId, setIsSettingId] = useState(!initialAgentId && !envAgentId);
   
   const activeFileContextRef = useRef(activeFileContext);
+  const fullCodebaseRef = useRef(fullCodebase);
+
   useEffect(() => {
     activeFileContextRef.current = activeFileContext;
   }, [activeFileContext]);
+
+  useEffect(() => {
+    fullCodebaseRef.current = fullCodebase;
+  }, [fullCodebase]);
 
   const conversation = useConversation({
     onConnect: () => console.log('Connected to ElevenLabs'),
@@ -32,20 +40,30 @@ export default function ElevenLabsAgent({
     onMessage: (messageDetail: any) => console.log('Message:', messageDetail),
     onError: (error: any) => console.error('ElevenLabs Error:', error),
     clientTools: {
+      get_codebase_context: async () => {
+        if (!fullCodebaseRef.current || fullCodebaseRef.current.length === 0) {
+          return "No codebase context available yet. The system is still mapping the repository.";
+        }
+        return JSON.stringify(fullCodebaseRef.current);
+      },
       get_current_file_info: async () => {
-        if (!activeFileContextRef.current) return "No file selected. User might be viewing the dashboard.";
-        return JSON.stringify(activeFileContextRef.current);
+        const ctx = activeFileContextRef.current;
+        if (!ctx) return "The user is currently on the dashboard.";
+        return JSON.stringify(ctx);
       },
     },
   });
 
   const { status, isSpeaking } = conversation;
 
+  const lastSentMessageRef = useRef<string | null>(null);
+
   // Proactive speech logic: trigger explanation on slide change
   useEffect(() => {
-    if (status === 'connected' && triggerMessage) {
+    if (status === 'connected' && triggerMessage && triggerMessage !== lastSentMessageRef.current) {
       const timer = setTimeout(() => {
-        (conversation as any).sendMessage?.(triggerMessage);
+        (conversation as any).sendUserMessage?.(triggerMessage);
+        lastSentMessageRef.current = triggerMessage;
       }, 500);
       return () => clearTimeout(timer);
     }
@@ -61,7 +79,8 @@ export default function ElevenLabsAgent({
           agentId,
           connectionType: 'websocket' as any,
           dynamicVariables: {
-            user_context: context || 'User is browsing projects.',
+            user_context: (context || 'User is browsing projects.') + 
+              "\n\nIMPORTANT: You have access to the tool 'get_codebase_context' which returns the entire repository's raw code and summaries. Call it immediately to initialize your knowledge.",
           }
         });
       } catch (error) {
