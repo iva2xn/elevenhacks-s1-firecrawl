@@ -13,6 +13,7 @@ interface FileExplainerProps {
   };
   isLoading?: boolean;
   activeHighlight?: string | null;
+  onExplainBlock?: (code: string) => void;
   children?: React.ReactNode;
 }
 
@@ -22,6 +23,7 @@ export default function FileExplainer({
   externalData, 
   isLoading, 
   activeHighlight,
+  onExplainBlock,
   children 
 }: FileExplainerProps) {
   const codeRef = useRef<HTMLPreElement>(null);
@@ -58,6 +60,54 @@ export default function FileExplainer({
     });
   }, [rawCode, activeHighlight]);
 
+  const interactiveBlocks = useMemo(() => {
+    if (!rawCode) return null;
+
+    // Split code into blocks by empty lines
+    const blocks = rawCode.split(/\n\s*\n/);
+    
+    return blocks.map((block, i) => {
+      // Find where this block appears in the original code to handle highlights correctly
+      // For simplicity, we just check if the activeHighlight is in this block
+      const hasHighlight = activeHighlight && block.toLowerCase().includes(activeHighlight.toLowerCase());
+
+      return (
+        <div 
+          key={i}
+          onClick={() => onExplainBlock?.(block)}
+          className={`
+            group relative p-3 my-2 rounded-xl transition-all duration-300 cursor-pointer
+            hover:bg-primary/10 hover:ring-2 hover:ring-primary/40
+            ${hasHighlight 
+              ? 'bg-primary/10 ring-2 ring-primary/60 shadow-[0_0_25px_rgba(59,130,246,0.15)] bg-slate-900/40 border-l-4 border-l-primary' 
+              : 'border-l-4 border-l-transparent'
+            }
+          `}
+        >
+          <pre className="text-[11px] font-mono text-blue-300/90 leading-relaxed whitespace-pre">
+            {hasHighlight && activeHighlight ? (
+              block.split(new RegExp(`(${activeHighlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')).map((part, j) => {
+                if (part.toLowerCase() === activeHighlight.toLowerCase()) {
+                  return (
+                    <span 
+                      key={j} 
+                      className="ai-highlight bg-blue-500/40 text-white px-1 rounded shadow-[0_0_10px_rgba(59,130,246,0.3)]"
+                    >
+                      {part}
+                    </span>
+                  );
+                }
+                return part;
+              })
+            ) : (
+              block
+            )}
+          </pre>
+        </div>
+      );
+    });
+  }, [rawCode, activeHighlight, onExplainBlock]);
+
   if (isLoading) {
     return (
       <div className="bg-card border border-border rounded-2xl p-8 flex flex-col items-center justify-center space-y-4 animate-pulse min-h-[400px]">
@@ -76,13 +126,8 @@ export default function FileExplainer({
             <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em]">Full Source Code</span>
             <span className="text-[10px] font-mono text-muted-foreground/50">{rawCode.split('\n').length} lines</span>
           </div>
-          <div className="max-h-[600px] overflow-auto scrollbar-hide">
-            <pre 
-              ref={codeRef}
-              className="p-6 text-[11px] font-mono text-blue-300/90 leading-relaxed whitespace-pre overflow-x-auto bg-black/20"
-            >
-              <code>{highlightedCode}</code>
-            </pre>
+          <div className="max-h-[600px] overflow-auto scrollbar-hide p-4">
+            {interactiveBlocks}
           </div>
           
           {/* Slot for Mic Button or other controls */}

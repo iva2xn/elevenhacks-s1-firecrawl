@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Globe, Search, Layers, BookOpen, ExternalLink, Sparkles, FolderTree, Code2, Loader2, Info, ChevronLeft, ChevronRight, History, Trash2, Plus, Terminal, Menu, X, ArrowLeft } from 'lucide-react';
 import FileExplainer from '@/components/FileExplainer';
-import ElevenLabsAgent from '@/components/ElevenLabsAgent';
+import ElevenLabsAgent, { ElevenLabsAgentHandle } from '@/components/ElevenLabsAgent';
 
 interface Project {
   id: string;
@@ -21,6 +21,7 @@ export default function Home() {
   const [repoUrl, setRepoUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const agentRef = useRef<ElevenLabsAgentHandle>(null);
 
   const activeProject = projects.find(p => p.id === selectedProjectId);
 
@@ -28,9 +29,12 @@ export default function Home() {
   const [cache, setCache] = useState<Record<string, any>>({});
   const [activeHighlight, setActiveHighlight] = useState<string | null>(null);
   
+  const [lastBlockRequest, setLastBlockRequest] = useState<{ code: string; timestamp: number } | null>(null);
+  
   // Reset highlight when project or file changes
   useEffect(() => {
     setActiveHighlight(null);
+    setLastBlockRequest(null);
   }, [selectedProjectId, activeIndex]);
 
   const handleNavigate = useCallback((fileName: string) => {
@@ -362,8 +366,13 @@ export default function Home() {
                       externalData={cache[currentFile || '']?.explanation} 
                       isLoading={!cache[currentFile || '']}
                       activeHighlight={activeHighlight}
+                      onExplainBlock={(code) => {
+                        setLastBlockRequest({ code, timestamp: Date.now() });
+                        agentRef.current?.startSession();
+                      }}
                     >
                       <ElevenLabsAgent 
+                        ref={agentRef}
                         className="relative bottom-0 right-0"
                         context={activeProject?.readmeContent} 
                         fullCodebase={activeProject?.mappedLinks
@@ -382,7 +391,11 @@ export default function Home() {
                         activeFileContext={currentFile ? {
                           fileName: currentFile.split('/').pop(),
                         } : null}
-                        triggerMessage={currentFile ? `[CONTEXT] User is now viewing: ${currentFile.split('/').pop()}. Do NOT update with an audible response; just update your internal context silently.` : ''}
+                        triggerMessage={
+                          lastBlockRequest 
+                            ? `[REQUEST] Explain this specific block from ${currentFile?.split('/').pop()}:\n\n${lastBlockRequest.code}`
+                            : (currentFile ? `[CONTEXT] User is now viewing: ${currentFile.split('/').pop()}. Do NOT update with an audible response; just update your internal context silently.` : '')
+                        }
                         onHighlight={handleHighlight}
                       />
                     </FileExplainer>

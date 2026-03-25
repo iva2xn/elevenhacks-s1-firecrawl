@@ -1,7 +1,7 @@
 'use client';
 
 import { useConversation } from '@elevenlabs/react';
-import { useCallback, useState, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Mic, MicOff, Loader2 } from 'lucide-react';
 
 interface ElevenLabsAgentProps {
@@ -10,19 +10,25 @@ interface ElevenLabsAgentProps {
   activeFileContext?: any;
   triggerMessage?: string;
   fullCodebase?: any[];
+  allFiles?: any[]; // Added based on instruction
   className?: string;
   onHighlight?: (text: string) => void;
 }
 
-export default function ElevenLabsAgent({
+export interface ElevenLabsAgentHandle {
+  startSession: () => Promise<void>;
+}
+
+const ElevenLabsAgent = forwardRef<ElevenLabsAgentHandle, ElevenLabsAgentProps>(({
   agentId: initialAgentId,
   context,
   activeFileContext,
   triggerMessage,
   fullCodebase,
+  allFiles,
   className,
   onHighlight
-}: ElevenLabsAgentProps) {
+}, ref) => {
   const envAgentId = process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID || '';
   const agentId = initialAgentId || envAgentId;
 
@@ -115,6 +121,14 @@ export default function ElevenLabsAgent({
     }
   }, [status, conversation, agentId, context]);
 
+  useImperativeHandle(ref, () => ({
+    startSession: async () => {
+      if (status !== 'connected') {
+        await toggleConversation();
+      }
+    }
+  }));
+
   return (
     <div className={`z-50 flex flex-col items-end gap-3 animate-in fade-in slide-in-from-bottom-4 duration-500 ${className || 'fixed bottom-8 right-8'}`}>
       <div className="flex items-center gap-3">
@@ -147,4 +161,6 @@ export default function ElevenLabsAgent({
       </div>
     </div>
   );
-}
+});
+
+export default ElevenLabsAgent;
