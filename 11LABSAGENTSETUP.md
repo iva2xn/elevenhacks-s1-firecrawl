@@ -18,13 +18,7 @@ In the **Tools** section of your agent configuration, click **+ Add Tool** and s
 - **Parameters**: (Leave empty)
 - **Wait for response**: [X] (Checked)
 
-#### Tool 3: `navigate_to_file` [NEW]
-- **Description**: `Triggers a navigation change in the UI to show a specific file. Useful when the user asks about a different part of the codebase or to show relevant context.`
-- **Parameters**: 
-    - `fileName` (String): The exact name of the file (e.g., `route.ts`, `page.tsx`). Must be one of the files from the codebase context.
-- **Wait for response**: [X] (Checked)
-
-#### Tool 4: `highlight_code_block` [NEW]
+#### Tool 3: `highlight_code_block` [NEW]
 - **Description**: `Highlights a specific string of code in the currently active file and scrolls it into view. Use this to focus the user's attention on what you are talking about.`
 - **Parameters**:
     - `text` (String): The exact case-sensitive string of code to highlight (e.g., `const res = await fetch(...)`).
@@ -41,8 +35,6 @@ Copy and paste this into your Agent's **Instructions** box:
 
 # CORE LOGIC:
 - You already have the FULL CODEBASE above. You know every file, its code, and its purpose. USE THIS KNOWLEDGE to answer questions directly.
-- ON NAVIGATION: You receive a [EVENT] message. Summarize the file's purpose in ONE concise sentence.
-- INTERACTIVE NAVIGATION: Use `navigate_to_file` to switch views when relevant. DO NOT narrate this action.
 - VISUAL HIGHLIGHT: Use `highlight_code_block` for EVERY code block you reference. Do this silently.
 
 # STYLE:

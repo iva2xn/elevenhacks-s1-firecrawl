@@ -382,8 +382,7 @@ export default function Home() {
                         activeFileContext={currentFile ? {
                           fileName: currentFile.split('/').pop(),
                         } : null}
-                        triggerMessage={currentFile ? `[EVENT] User navigated to ${currentFile.split('/').pop()}. Call 'get_current_file_info' and summarize its purpose.` : ''}
-                        onNavigate={handleNavigate}
+                        triggerMessage={currentFile ? `[CONTEXT] User is now viewing: ${currentFile.split('/').pop()}. Do NOT update with an audible response; just update your internal context silently.` : ''}
                         onHighlight={handleHighlight}
                       />
                     </FileExplainer>

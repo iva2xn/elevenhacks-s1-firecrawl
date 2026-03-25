@@ -11,7 +11,6 @@ interface ElevenLabsAgentProps {
   triggerMessage?: string;
   fullCodebase?: any[];
   className?: string;
-  onNavigate?: (fileName: string) => void;
   onHighlight?: (text: string) => void;
 }
 
@@ -22,7 +21,6 @@ export default function ElevenLabsAgent({
   triggerMessage,
   fullCodebase,
   className,
-  onNavigate,
   onHighlight
 }: ElevenLabsAgentProps) {
   const envAgentId = process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID || '';
@@ -30,7 +28,6 @@ export default function ElevenLabsAgent({
 
   const activeFileContextRef = useRef(activeFileContext);
   const fullCodebaseRef = useRef(fullCodebase);
-  const onNavigateRef = useRef(onNavigate);
   const onHighlightRef = useRef(onHighlight);
 
   useEffect(() => {
@@ -40,10 +37,6 @@ export default function ElevenLabsAgent({
   useEffect(() => {
     fullCodebaseRef.current = fullCodebase;
   }, [fullCodebase]);
-
-  useEffect(() => {
-    onNavigateRef.current = onNavigate;
-  }, [onNavigate]);
 
   useEffect(() => {
     onHighlightRef.current = onHighlight;
@@ -65,15 +58,6 @@ export default function ElevenLabsAgent({
         const ctx = activeFileContextRef.current;
         if (!ctx) return "The user is currently on the dashboard.";
         return JSON.stringify(ctx);
-      },
-      navigate_to_file: async ({ fileName }: { fileName: string }) => {
-        console.log('[TOOL] navigate_to_file called with:', fileName);
-        if (onNavigateRef.current) {
-          onNavigateRef.current(fileName);
-          return `Done.`;
-        }
-        console.error('[TOOL] onNavigateRef is null!');
-        return "Navigation handler not available.";
       },
       highlight_code_block: async ({ text }: { text: string }) => {
         console.log('[TOOL] highlight_code_block called with:', text);
@@ -122,7 +106,7 @@ export default function ElevenLabsAgent({
           agentId,
           connectionType: 'websocket' as any,
           dynamicVariables: {
-            user_context: (context || 'User is browsing projects.') + codebaseSummary,
+            user_context: (context || 'User is browsing projects.') + "\n\nCRITICAL: You CANNOT navigate to files yourself. Do NOT attempt to use a navigation tool; it has been disabled. The user will navigate manually." + codebaseSummary,
           }
         });
       } catch (error) {
