@@ -133,6 +133,10 @@ export async function POST(req: Request) {
     
     const filteredFiles = allDiscoveredFiles.filter((f: any) => {
       const lowerName = f.name.toLowerCase();
+      const url = (f.url || '').toLowerCase();
+      
+      // ONLY keep actual file URLs (blob), not folder URLs (tree)
+      if (url.includes('/tree/')) return false;
       
       // Strict rule: Only keep README.md if it's a markdown file
       if (lowerName.endsWith('.md') && lowerName !== 'readme.md') {
@@ -143,6 +147,9 @@ export async function POST(req: Request) {
       if (imageExtensions.some(ext => lowerName.endsWith(ext))) {
         return false;
       }
+      
+      // Ignore folders by type
+      if (f.type === 'folder') return false;
       
       // Explicitly ignore boilerplate/config
       const isBlacklisted = ignoreList.some(term => lowerName.includes(term));
