@@ -25,34 +25,6 @@ export default function FileExplainer({ fileUrl, rawCode, externalData, isLoadin
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-700">
-      {/* AI Summary */}
-      {externalData && (
-        <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-5">
-          <div className="flex items-center gap-3">
-            <h3 className="text-[10px] font-black text-blue-400 tracking-[0.3em] uppercase">AI Summary</h3>
-            <div className="h-px flex-1 bg-blue-500/10" />
-          </div>
-          <p className="text-sm text-neutral-200 leading-relaxed font-medium">{externalData.summary}</p>
-
-          <div className="space-y-3">
-            {externalData.highlights.map((h, i) => (
-              <div key={i} className="flex items-start gap-3 bg-neutral-800/30 border border-neutral-800/50 p-4 rounded-xl">
-                <CheckCircle className="w-3.5 h-3.5 text-green-500 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-xs font-black text-white uppercase tracking-wider">{h.feature}</p>
-                  <p className="text-xs text-neutral-400 leading-relaxed">{h.explanation}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-3 text-xs text-amber-400/80 bg-amber-400/5 px-4 py-3 rounded-xl border border-amber-400/10">
-            <Info className="w-4 h-4 shrink-0" />
-            <p>{externalData.targetAudienceNotice}</p>
-          </div>
-        </div>
-      )}
-
       {/* Full Raw Code */}
       {rawCode && (
         <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">

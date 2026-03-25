@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Globe, Search, Layers, BookOpen, ExternalLink, Sparkles, FolderTree, Code2, Loader2, Info, ChevronLeft, ChevronRight, History, Trash2, Plus, Terminal } from 'lucide-react';
+import { Globe, Search, Layers, BookOpen, ExternalLink, Sparkles, FolderTree, Code2, Loader2, Info, ChevronLeft, ChevronRight, History, Trash2, Plus, Terminal, Menu, X } from 'lucide-react';
 import FileExplainer from '@/components/FileExplainer';
 import ElevenLabsAgent from '@/components/ElevenLabsAgent';
 
@@ -16,6 +16,7 @@ interface Project {
 export default function Home() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   const [repoUrl, setRepoUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -27,12 +28,22 @@ export default function Home() {
 
   // LOAD projects from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('repo-mapper-projects');
-    if (saved) {
+    const savedProjects = localStorage.getItem('repo-mapper-projects');
+    const savedCache = localStorage.getItem('repo-mapper-cache');
+    
+    if (savedProjects) {
       try {
-        setProjects(JSON.parse(saved));
+        setProjects(JSON.parse(savedProjects));
       } catch (e) {
         console.error('Failed to parse projects', e);
+      }
+    }
+    
+    if (savedCache) {
+      try {
+        setCache(JSON.parse(savedCache));
+      } catch (e) {
+        console.error('Failed to parse cache', e);
       }
     }
   }, []);
@@ -41,6 +52,20 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem('repo-mapper-projects', JSON.stringify(projects));
   }, [projects]);
+
+  // SAVE cache to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('repo-mapper-cache', JSON.stringify(cache));
+    } catch (e) {
+      // If we hit quota, clear old items (naive approach)
+      console.warn("localStorage quota hit, wiping cache for safety.");
+      if (Object.keys(cache).length > 50) {
+        setCache({});
+        localStorage.removeItem('repo-mapper-cache');
+      }
+    }
+  }, [cache]);
 
   const activeProject = projects.find(p => p.id === selectedProjectId);
 
@@ -74,6 +99,7 @@ export default function Home() {
       setSelectedProjectId(newProject.id);
       setActiveIndex(0);
       setRepoUrl('');
+      setIsSidebarOpen(false);
       
       // Initial scrape of first 3 items for speed
       scrapeBatch(newProject.mappedLinks.slice(0, 3));
@@ -125,16 +151,33 @@ export default function Home() {
   const currentFile = activeProject?.mappedLinks[activeIndex];
 
   return (
-    <main className="flex h-screen bg-black text-white selection:bg-blue-500/30 selection:text-blue-200 overflow-hidden">
+    <main className="flex h-screen bg-black text-white selection:bg-blue-500/30 selection:text-blue-200 overflow-hidden relative">
       {/* Background Glows */}
-      <div className="fixed inset-0 pointer-events-none opacity-20">
+      <div className="fixed inset-0 pointer-events-none opacity-20 z-0">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600 rounded-full blur-[150px] animate-pulse" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600 rounded-full blur-[150px] animate-pulse delay-1000" />
       </div>
 
+      {/* MOBILE HEADER (Logo + Burger) */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 p-6 flex items-center justify-between bg-black/50 backdrop-blur-md border-b border-neutral-800">
+         <div className="flex items-center gap-2">
+            <Terminal className="w-5 h-5 text-blue-500" />
+            <h1 className="text-sm font-black uppercase tracking-[0.2em]">Dashboard</h1>
+          </div>
+          <button 
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="p-2 bg-neutral-900 border border-neutral-800 rounded-xl"
+          >
+            {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+      </div>
+
       {/* DASHBOARD SIDEBAR */}
-      <aside className="relative w-80 bg-neutral-900/50 border-r border-neutral-800 flex flex-col items-stretch backdrop-blur-xl">
-        <div className="p-6 border-b border-neutral-800 flex items-center justify-between">
+      <aside className={`
+        fixed lg:relative z-40 w-80 h-full bg-neutral-900/50 border-r border-neutral-800 flex flex-col items-stretch backdrop-blur-xl transition-transform duration-500 lg:translate-x-0
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
+        <div className="hidden lg:flex p-6 border-b border-neutral-800 items-center justify-between">
           <div className="flex items-center gap-2">
             <Terminal className="w-5 h-5 text-blue-500" />
             <h1 className="text-sm font-black uppercase tracking-[0.2em]">Dashboard</h1>
@@ -147,7 +190,7 @@ export default function Home() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide">
+        <div className="flex-1 overflow-y-auto p-4 pt-24 lg:pt-4 space-y-3 scrollbar-hide">
           <div className="px-2 py-1 text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2">
             <History className="w-3 h-3" />
             Recent Projects ({projects.length})
@@ -155,7 +198,7 @@ export default function Home() {
           {projects.map(p => (
             <div
               key={p.id}
-              onClick={() => { setSelectedProjectId(p.id); setActiveIndex(0); }}
+              onClick={() => { setSelectedProjectId(p.id); setActiveIndex(0); setIsSidebarOpen(false); }}
               className={`group flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border ${
                 selectedProjectId === p.id 
                   ? 'bg-blue-600/10 border-blue-500/30 text-white' 
@@ -190,8 +233,16 @@ export default function Home() {
         </div>
       </aside>
 
+      {/* MOBILE OVERLAY */}
+      {isSidebarOpen && (
+        <div 
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 z-30 bg-black/60 lg:hidden backdrop-blur-sm animate-in fade-in duration-300"
+        />
+      )}
+
       {/* MAIN CONTENT SPACE */}
-      <section className="relative flex-1 flex flex-col overflow-hidden items-center justify-center">
+      <section className="relative flex-1 flex flex-col overflow-y-auto lg:overflow-hidden items-center justify-center pt-24 lg:pt-0">
         {!selectedProjectId ? (
           /* HOMEPAGE: New Project Form */
           <div className="max-w-xl w-full p-8 md:p-12 space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
