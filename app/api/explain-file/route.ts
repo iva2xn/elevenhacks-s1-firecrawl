@@ -16,13 +16,36 @@ function toRawUrl(url: string): string {
 
 export async function POST(req: Request) {
   try {
-    const { fileUrl } = await req.json();
+    const { fileUrl, level = 'intermediate' } = await req.json();
 
     if (!fileUrl) {
       return NextResponse.json({ error: 'File URL is required' }, { status: 400 });
     }
     if (!FIRECRAWL_API_KEY) {
       return NextResponse.json({ error: 'Firecrawl API Key is missing' }, { status: 500 });
+    }
+
+    // Level-specific prompts and descriptions
+    let promptPrefix = "";
+    let summaryDesc = "";
+    let highlightDesc = "";
+
+    switch(level) {
+      case 'beginner':
+        promptPrefix = "Explain like I'm 5. Avoid overly technical jargon. Focus on high-level concepts and what it does for the user. Use metaphors if helpful.";
+        summaryDesc = "Simple 2-sentence summary using everyday language.";
+        highlightDesc = "3-5 key features explained simply without complex jargon.";
+        break;
+      case 'advanced':
+        promptPrefix = "Be extremely technical. Focus on performance, memory usage, patterns, and low-level implementation details. Assume I know the language well.";
+        summaryDesc = "Deeply technical 2-sentence summary including architecture and performance considerations.";
+        highlightDesc = "3-5 advanced implementation details, specialized patterns, or performance optimizations.";
+        break;
+      default: // intermediate
+        promptPrefix = "Analyze the source code. Focus on functions, hooks, API calls, state management, and core logic. Be technical.";
+        summaryDesc = "Technical 2-sentence summary of what this code file does.";
+        highlightDesc = "3-5 key technical features found in the code.";
+        break;
     }
 
     // Step 1: Fetch the FULL raw code directly from GitHub
@@ -48,13 +71,13 @@ export async function POST(req: Request) {
         url: fileUrl,
         formats: ['extract'],
         extract: {
-          prompt: "Analyze the source code. Focus on functions, hooks, API calls, state management, and core logic. Be technical.",
+          prompt: promptPrefix,
           schema: {
             type: "object",
             properties: {
               summary: {
                 type: "string",
-                description: "Technical 2-sentence summary of what this code file does."
+                description: summaryDesc
               },
               highlights: {
                 type: "array",
@@ -62,10 +85,10 @@ export async function POST(req: Request) {
                   type: "object",
                   properties: {
                     feature: { type: "string", description: "Name of the logic block or function." },
-                    explanation: { type: "string", description: "Technical explanation of how it works." }
+                    explanation: { type: "string", description: highlightDesc }
                   }
                 },
-                description: "3-5 key technical features found in the code."
+                description: "Key features found in the code."
               },
               targetAudienceNotice: {
                 type: "string",

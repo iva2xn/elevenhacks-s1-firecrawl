@@ -28,7 +28,15 @@ export default function Home() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [cache, setCache] = useState<Record<string, any>>({});
   const [activeHighlight, setActiveHighlight] = useState<string | null>(null);
-  
+  const [explanationLevel, setExplanationLevel] = useState<'beginner' | 'intermediate' | 'advanced'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('repo-mapper-level');
+      if (saved && ['beginner', 'intermediate', 'advanced'].includes(saved)) {
+        return saved as any;
+      }
+    }
+    return 'intermediate';
+  });
   const [lastBlockRequest, setLastBlockRequest] = useState<{ code: string; timestamp: number } | null>(null);
   
   // Reset highlight when project or file changes
@@ -70,6 +78,8 @@ export default function Home() {
     setActiveHighlight(text);
   }, []);
 
+  const currentFile = activeProject?.mappedLinks[activeIndex];
+
   // LOAD projects from localStorage
   useEffect(() => {
     const savedProjects = localStorage.getItem('repo-mapper-projects');
@@ -85,7 +95,16 @@ export default function Home() {
     
     if (savedCache) {
       try {
-        setCache(JSON.parse(savedCache));
+        const parsed = JSON.parse(savedCache);
+        // Migrate old format to new format
+        Object.keys(parsed).forEach(key => {
+          if (parsed[key].explanation && !parsed[key].intermediate) {
+            parsed[key].intermediate = parsed[key].explanation;
+            // Clean up old key to keep it tidy
+            delete parsed[key].explanation;
+          }
+        });
+        setCache(parsed);
       } catch (e) {
         console.error('Failed to parse cache', e);
       }
@@ -101,6 +120,7 @@ export default function Home() {
   useEffect(() => {
     try {
       localStorage.setItem('repo-mapper-cache', JSON.stringify(cache));
+      localStorage.setItem('repo-mapper-level', explanationLevel);
     } catch (e) {
       console.warn("localStorage quota hit, wiping cache for safety.");
       if (Object.keys(cache).length > 50) {
@@ -108,7 +128,7 @@ export default function Home() {
         localStorage.removeItem('repo-mapper-cache');
       }
     }
-  }, [cache]);
+  }, [cache, explanationLevel]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,15 +170,9 @@ export default function Home() {
     }
   };
 
-  const scrapeBatch = async (links: string[]) => {
-    for (const link of links) {
-      if (!cache[link]) {
-        await scrapeFile(link);
-      }
-    }
-  };
-
   const scrapeFile = async (fileUrl: string) => {
+    if (cache[fileUrl] && cache[fileUrl].explanation) return;
+    
     try {
       const res = await fetch('/api/explain-file', {
         method: 'POST',
@@ -167,7 +181,14 @@ export default function Home() {
       });
       const data = await res.json();
       if (res.ok) {
-        setCache(prev => ({ ...prev, [fileUrl]: { explanation: data.explanation, rawCode: data.rawCode } }));
+        setCache(prev => ({
+          ...prev,
+          [fileUrl]: {
+            ...prev[fileUrl],
+            rawCode: data.rawCode,
+            explanation: data.explanation
+          }
+        }));
       }
     } catch (e) {
       console.error('Scrape failed:', fileUrl, e);
@@ -175,9 +196,23 @@ export default function Home() {
   };
 
   useEffect(() => {
+    if (currentFile && !cache[currentFile]?.explanation) {
+      scrapeFile(currentFile);
+    }
+  }, [currentFile, cache]);
+
+  const scrapeBatch = async (links: string[]) => {
+    for (const link of links) {
+      if (!cache[link] || !cache[link].explanation) {
+        await scrapeFile(link);
+      }
+    }
+  };
+
+  useEffect(() => {
     if (activeProject && activeProject.mappedLinks[activeIndex + 2]) {
       const link = activeProject.mappedLinks[activeIndex + 2];
-      if (!cache[link]) scrapeFile(link);
+      if (!cache[link] || !cache[link].explanation) scrapeFile(link);
     }
   }, [activeIndex, activeProject, cache]);
 
@@ -187,7 +222,6 @@ export default function Home() {
     if (selectedProjectId === id) setSelectedProjectId(null);
   };
 
-  const currentFile = activeProject?.mappedLinks[activeIndex];
 
   return (
     <main className="flex h-screen bg-background text-foreground selection:bg-primary/30 selection:text-primary-foreground overflow-hidden font-sans dark">
@@ -286,7 +320,26 @@ export default function Home() {
                 </h1>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-4">
+                {/* Level Switcher */}
+                <div className="hidden sm:flex items-center bg-secondary border border-border rounded-xl p-1 shadow-sm">
+                  {(['beginner', 'intermediate', 'advanced'] as const).map((lvl) => (
+                    <button
+                      key={lvl}
+                      onClick={() => setExplanationLevel(lvl)}
+                      className={`
+                        px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all
+                        ${explanationLevel === lvl 
+                          ? 'bg-primary text-primary-foreground shadow-sm scale-105' 
+                          : 'text-muted-foreground hover:text-foreground'
+                        }
+                      `}
+                    >
+                      {lvl}
+                    </button>
+                  ))}
+                </div>
+
                 <a 
                   href={currentFile} 
                   target="_blank" 
@@ -364,7 +417,7 @@ export default function Home() {
                       fileUrl={currentFile || ''} 
                       rawCode={cache[currentFile || '']?.rawCode}
                       externalData={cache[currentFile || '']?.explanation} 
-                      isLoading={!cache[currentFile || '']}
+                      isLoading={!cache[currentFile || '']?.explanation}
                       activeHighlight={activeHighlight}
                       onExplainBlock={(code) => {
                         setLastBlockRequest({ code, timestamp: Date.now() });
@@ -373,6 +426,7 @@ export default function Home() {
                     >
                       <ElevenLabsAgent 
                         ref={agentRef}
+                        level={explanationLevel}
                         className="relative bottom-0 right-0"
                         context={activeProject?.readmeContent} 
                         fullCodebase={activeProject?.mappedLinks
@@ -384,7 +438,8 @@ export default function Home() {
                               path: link.replace('https://github.com/', ''),
                               code: data.rawCode,
                               summary: data.explanation?.summary,
-                              highlights: data.explanation?.highlights
+                              highlights: data.explanation?.highlights,
+                              expertiseLevel: explanationLevel // Pass setting to context
                             };
                           })
                           .filter(Boolean)}

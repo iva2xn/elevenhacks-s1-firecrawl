@@ -12,6 +12,7 @@ interface ElevenLabsAgentProps {
   fullCodebase?: any[];
   allFiles?: any[]; // Added based on instruction
   className?: string;
+  level?: 'beginner' | 'intermediate' | 'advanced';
   onHighlight?: (text: string) => void;
 }
 
@@ -27,6 +28,7 @@ const ElevenLabsAgent = forwardRef<ElevenLabsAgentHandle, ElevenLabsAgentProps>(
   fullCodebase,
   allFiles,
   className,
+  level = 'intermediate',
   onHighlight
 }, ref) => {
   const envAgentId = process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID || '';
@@ -112,7 +114,9 @@ const ElevenLabsAgent = forwardRef<ElevenLabsAgentHandle, ElevenLabsAgentProps>(
           agentId,
           connectionType: 'websocket' as any,
           dynamicVariables: {
-            user_context: (context || 'User is browsing projects.') + "\n\nCRITICAL: You CANNOT navigate to files yourself. Do NOT attempt to use a navigation tool; it has been disabled. The user will navigate manually." + codebaseSummary,
+            user_context: (context || 'User is browsing projects.') + 
+              `The user expertise level is: ${level}. Adjust your tone and complexity accordingly.` +
+              "\n\nCRITICAL: You CANNOT navigate to files yourself. Do NOT attempt to use a navigation tool; it has been disabled. The user will navigate manually." + codebaseSummary,
           }
         });
       } catch (error) {
