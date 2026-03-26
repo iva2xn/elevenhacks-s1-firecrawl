@@ -170,14 +170,14 @@ export default function Home() {
     }
   };
 
-  const scrapeFile = async (fileUrl: string) => {
-    if (cache[fileUrl] && cache[fileUrl].explanation) return;
+  const scrapeFile = async (fileUrl: string, level: string = explanationLevel) => {
+    if (cache[fileUrl] && cache[fileUrl][level]) return;
     
     try {
       const res = await fetch('/api/explain-file', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileUrl }),
+        body: JSON.stringify({ fileUrl, level }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -186,7 +186,7 @@ export default function Home() {
           [fileUrl]: {
             ...prev[fileUrl],
             rawCode: data.rawCode,
-            explanation: data.explanation
+            [level]: data.explanation
           }
         }));
       }
@@ -196,15 +196,15 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (currentFile && !cache[currentFile]?.explanation) {
-      scrapeFile(currentFile);
+    if (currentFile && !cache[currentFile]?.[explanationLevel]) {
+      scrapeFile(currentFile, explanationLevel);
     }
-  }, [currentFile, cache]);
+  }, [currentFile, cache, explanationLevel]);
 
   const scrapeBatch = async (links: string[]) => {
     for (const link of links) {
-      if (!cache[link] || !cache[link].explanation) {
-        await scrapeFile(link);
+      if (!cache[link] || !cache[link][explanationLevel]) {
+        await scrapeFile(link, explanationLevel);
       }
     }
   };
@@ -212,9 +212,9 @@ export default function Home() {
   useEffect(() => {
     if (activeProject && activeProject.mappedLinks[activeIndex + 2]) {
       const link = activeProject.mappedLinks[activeIndex + 2];
-      if (!cache[link] || !cache[link].explanation) scrapeFile(link);
+      if (!cache[link] || !cache[link][explanationLevel]) scrapeFile(link, explanationLevel);
     }
-  }, [activeIndex, activeProject, cache]);
+  }, [activeIndex, activeProject, cache, explanationLevel]);
 
   const removeProject = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -416,8 +416,8 @@ export default function Home() {
                     <FileExplainer 
                       fileUrl={currentFile || ''} 
                       rawCode={cache[currentFile || '']?.rawCode}
-                      externalData={cache[currentFile || '']?.explanation} 
-                      isLoading={!cache[currentFile || '']?.explanation}
+                      externalData={cache[currentFile || '']?.[explanationLevel]} 
+                      isLoading={!cache[currentFile || '']?.[explanationLevel]}
                       activeHighlight={activeHighlight}
                       onExplainBlock={(code) => {
                         setLastBlockRequest({ code, timestamp: Date.now() });
@@ -437,8 +437,8 @@ export default function Home() {
                               fileName: link.split('/').pop(),
                               path: link.replace('https://github.com/', ''),
                               code: data.rawCode,
-                              summary: data.explanation?.summary,
-                              highlights: data.explanation?.highlights,
+                              summary: data[explanationLevel]?.summary,
+                              highlights: data[explanationLevel]?.highlights,
                               expertiseLevel: explanationLevel // Pass setting to context
                             };
                           })
